@@ -79,14 +79,22 @@ The folder ``.github/workflows`` contains the workflow definitions. The workflow
 described above. Additionally, to actual workflows are available as references
 of actually using it to test something.
 
-autorun.yml
-  This utilized the ``autorun.sh`` script to invoke a unittest-run. However, due
-  to lack of proper execution environment then this always fails.
+dispatch.yml
+  Retrieve changes from gerrit and push to SPDK mirror and trigger "autorun.yml"
 
-unittest.yml
-  This currently just does a **check-format** and a ``unittest_build`` which is
-  very basic, yet it still illustrates how to define dependencies between jobs
-  in the workflow, retrieving the patchset / changes and invoking tests.
+autorun.yml - autorun.sh in a qemu guest
+  This utilizes the ``autorun.sh`` script to invoke a unittest. It should
+  be trivial to extend the scope of what is executed, e.g. scaling tests out
+  to run in parallel. Status of all the jobs are combined in the job named
+  "report" which is intended to report status back to gerrit. This executes on
+  guest-guests using the Docker and .qcow images produced in build_images.yml.
+  
+build_images.yml - build Docker Image
+  Build and push to ghcr.io
+
+build_images.yml - build qcow2 Image
+  Build .qcow2 image and push it to S3 compatible storage, currently a 1TB
+  BackBlaze B2 bucket is utilized.
 
 FAQ
 ---
