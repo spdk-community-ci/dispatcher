@@ -1,0 +1,64 @@
+---
+name: dispatch
+
+on:
+  schedule:
+  - cron: '0 * * * *'
+
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: '--limit'
+        required: false
+        default: 2 # If you change this, then also address CHANGES_LIMIT
+
+jobs:
+  gerrit_to_github:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+    - name: Change git config for GitHub Service Account
+      run: |
+        git config --global user.name "GitHub Service"
+        git config --global user.email "ghs@safl.dk"      
+
+    - name: Checkout CI repository
+      uses: actions/checkout@v4.1.7
+      with:
+        token: ${{ secrets.GHPA_TOKEN }}
+        path: ci
+
+    - name: Checkout SPDK repository
+      uses: actions/checkout@v4.1.7
+      with:
+        repository: safl/spdk
+        token: ${{ secrets.GHPA_TOKEN }}
+        path: spdk
+        fetch-depth: 0
+
+    - name: Add Gerrit-hosted-git to SPDK repository remotes
+      run: |
+        git -C spdk remote add gerrit https://review.spdk.io/gerrit/spdk/spdk
+        git -C spdk fetch gerrit
+
+    - name: Retrieve Changes from Gerrit, Push to GitHub and trigger!
+      env:
+        CHANGES_LIMIT: ${{ github.event.inputs.limit || 2 }}
+        GHPA_TOKEN: ${{ secrets.GHPA_TOKEN }}
+      run: |
+        ./ci/gerrit_changes_to_github.py \
+          --gerrit-api-url "https://review.spdk.io/gerrit/changes/?q=status:open+repo:spdk/spdk&o=CURRENT_REVISION" \
+          --git-repository-path spdk \
+          --git-remote-target-name origin \
+          --git-remote-gerrit-name gerrit \
+          --workflows autorun.yml \
+          --log gerrit_changes_to_github.log \
+          --limit ${CHANGES_LIMIT}
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4.4.0
+      with:
+        path: gerrit_changes_to_github.log
