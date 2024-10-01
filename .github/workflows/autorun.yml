@@ -1,0 +1,107 @@
+---
+name: autorun
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'The branch with changes e.g. "changes/xx/yyyyyy/zz"'
+        required: true
+        default: 'master'
+
+jobs:
+
+  summary_info:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Add Summary Information for Gerrit and repository branch
+      run: |
+        PR_NUMBER=$(echo "${{ github.event.inputs.branch }}" | cut -d '/' -f 3)
+
+        echo "### Change Information" >> $GITHUB_STEP_SUMMARY
+        echo "- **Gerrit Review**: https://review.spdk.io/gerrit/c/spdk/spdk/+/${GERRIT_REVIEW_URL}${PR_NUMBER}" >> $GITHUB_STEP_SUMMARY
+        echo "- **GitHub Branch**: https://github.com/safl/spdk/commits/${{ github.event.inputs.branch }}" >> $GITHUB_STEP_SUMMARY
+
+  source-archive:
+    runs-on: ubuntu-latest
+    container: ghcr.io/safl/spdk-community-ci:poc
+
+    steps:
+    - name: Checkout SPDK repository
+      uses: actions/checkout@v4.1.7
+      with:
+        repository: safl/spdk
+        ref: ${{ github.event.inputs.branch }}
+        token: ${{ secrets.GHPA_TOKEN }}
+        submodules: 'recursive'
+        fetch-depth: 0
+        path: spdk
+
+    - name: Create a tarball, of the repository, to preserve file permissions
+      run: |
+        cd spdk
+        tar -czf ../repository.tar.gz .
+
+    - name: Upload the repository as an artifact
+      uses: actions/upload-artifact@v4.4.0
+      with:
+        name: repository
+        path: repository.tar.gz
+
+  autorun_unittest:
+    needs: source-archive
+    runs-on: [self-hosted, linux, x64, qemuhost]
+    env:
+      REPOSITORY_TARBALL_PATH: ${{ github.workspace }}/repository.tar.gz
+
+    container:
+      image: ghcr.io/safl/spdk-community-ci:poc
+      options: --privileged
+
+    steps:
+    - name: Setup CIJOE and pipx
+      run: |
+        pipx install cijoe -f
+        pipx ensurepath
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+    - name: Checkout CI repository
+      uses: actions/checkout@v4.1.7
+      with:
+        path: ci
+
+    - name: Download the SPDK repository
+      uses: actions/download-artifact@v4.1.8
+      with:
+        name: repository
+
+    - name: Provision qemu-guest and invoke autorun.sh
+      run: |
+        cd ci/cijoe
+        cijoe \
+        --config configs/qemuhost-with-guest-fedora-40.toml \
+        --workflow workflows/autorun_in_qemu.yaml
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4.4.0
+      if: always()
+      with:
+        path: ci/cijoe/cijoe-output
+        name: report-autorun-in-qemu
+
+  report:
+    runs-on: ubuntu-latest
+    needs:
+    - source-archive
+    - autorun_unittest
+
+    if: always()
+    steps:
+    - name: Conditional behavior based on job status
+      run: |
+        if [[ "${{ needs.build.result }}" == "failure" || "${{ needs.autorun.result }}" == "failure" ]]; then
+          echo "One or more jobs failed."
+        else
+          echo "All jobs succeeded."
+        fi

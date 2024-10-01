@@ -27,7 +27,7 @@ default_guest = "fedora_40_x86_64"
 path = "{{ local.env.HOME }}/guests/fedora_40_x86_64"
 
 # Keyword arguments: joined onto the form: "-cpu host -smp 4 -m 4" etc.
-system_args.kwa = {cpu = "host", smp = 4, m = "8G", accel = "kvm"}
+system_args.kwa = {cpu = "host", smp = 12, m = "12G", accel = "kvm"}
 
 # Raw arguments: passed without modification to qemu-system-{arch}
 system_args.raw = """\
@@ -39,7 +39,7 @@ system_args.raw = """\
 system_args.tcp_forward = {host = 4200, guest = 22}
 
 # Used by: qemu.guest_init_using_bootimage.py
-init_using_bootimage.url = "https://u424897-sub1:xVCyd9qNUp9zcfNE@u424897-sub1.your-storagebox.de/system/fedora_40_x86_64.qcow2"
+init_using_bootimage.url = "https://spdk-community-ci.s3.eu-central-003.backblazeb2.com/system/fedora_40_x86_64.qcow2"
 init_using_bootimage.img = "{{ local.env.HOME }}/images/system/fedora-40-x86_64.qcow2"
 
 # Used by: qemu.guest_init_using_cloudinit

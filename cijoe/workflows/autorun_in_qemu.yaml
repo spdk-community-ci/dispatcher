@@ -1,0 +1,47 @@
+---
+doc: |
+  Create qemu guest, transfer SPDK .tgz source and invoke autorun
+
+  * Create qemu guest using a system/bootimg
+  * Transfer and unpack SPDK source to/in qemu guest
+  * Create auto.conf
+  * Invoke autorun.sh
+  * Shut down qemu guest
+
+steps:
+- name: guest_kill
+  uses: qemu.guest_kill
+
+- name: guest_bootimg
+  uses: qemu.guest_init_using_bootimage
+
+- name: guest_firstboot
+  uses: qemu_guest_start_custom_nvme
+
+- name: guest_misc
+  run: |
+    hostname
+    uname -a
+    dnf update -y
+    dnf autoremove -y
+    dnf install -y git perl-JSON-PP
+
+- name: tgz_transfer
+  uses: core.put
+  with:
+    src: "{{ local.env.REPOSITORY_TARBALL_PATH }}"
+    dst: /tmp/repository.tar.gz
+
+- name: tgz_unpack
+  run: |
+    mkdir /opt/spdk
+    tar xzf /tmp/repository.tar.gz -C /opt/spdk
+    
+- name: autorun
+  run: |
+    echo "SPDK_TEST_UNITTEST=1" > /tmp/auto.conf
+    /opt/spdk/autorun.sh /tmp/auto.conf
+    
+- name: guest_shutdown
+  run: |
+    systemctl poweroff
