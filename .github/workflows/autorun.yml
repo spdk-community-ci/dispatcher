@@ -87,6 +87,13 @@ jobs:
       uses: actions/upload-artifact@v4.4.0
       if: always()
       with:
+        path: /tmp/autorun_output
+        name: autorun_unittest_artifacts
+
+    - name: Upload Report
+      uses: actions/upload-artifact@v4.4.0
+      if: always()
+      with:
         path: ci/cijoe/cijoe-output
         name: report-autorun-in-qemu
 

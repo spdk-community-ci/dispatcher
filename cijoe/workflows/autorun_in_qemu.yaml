@@ -41,7 +41,18 @@ steps:
   run: |
     echo "SPDK_TEST_UNITTEST=1" > /tmp/auto.conf
     /opt/spdk/autorun.sh /tmp/auto.conf
-    
+
+- name: output_listing
+  run: |
+    ls /opt
+    ls /opt/output
+
+- name: retrieve_autorun_output
+  uses: core.get
+  with:
+    src: /opt/output
+    dst: /tmp/autorun_output
+     
 - name: guest_shutdown
   run: |
     systemctl poweroff
