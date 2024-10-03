@@ -53,6 +53,8 @@ The changes are processed in the order they are retrieved, consequently then cha
 501 least recently updated will be "starved". This can be fixed by modifying the range
 of received changes, however, has been kept out for this initial prototype of the
 integration.
+
+test
 """
 import argparse
 import json
@@ -72,6 +74,7 @@ REGEX_BRANCHES = (
     r"(?P<dir>\d+)\/(?P<change_nr>\d+)\/(?P<patch_nr>\d+)"
 )
 
+REGEX_FALSE_POSITIVE = r"false positive: \d{4}"
 
 def setup_default_logger(log_file: Path):
     """Setup the default logger to log to file and console"""
@@ -159,10 +162,11 @@ def parse_args():
 
     return parser.parse_args()
 
-
-def gerrit_changeinfo_via_rest_api(args) -> Optional[List[str]]:
+def gerrit_changeinfo_via_rest_api(args) -> Optional[List[Dict[str, str]]]:
     """
-    Returns a list of refs, retrieved via the Gerrit Rest API, or None on error.
+    Returns a list of refs and change_ids, retrieved via the Gerrit Rest API, or None on error.
+    Return format:
+        [{"ref": ref, "change_id": change_id}...]
     """
 
     if (response := requests.get(args.gerrit_api_url)).status_code != 200:
@@ -188,8 +192,7 @@ def gerrit_changeinfo_via_rest_api(args) -> Optional[List[str]]:
             if not (ref := meta.get("ref", None)):
                 log.error(f"Unexpected data for change({change})")
                 return None
-
-            refs.append(str(ref))
+            refs.append({"ref":str(ref), "id":change.get("change_id")})
 
     if len(remotes) != 1:  # There should only be a single anonymous gerrit remote
         log.error(f"Unexpected remotes({remotes})")
@@ -230,10 +233,28 @@ def changes_apply_filter(args, changes, branches) -> List[str]:
 
     filtered = []
     for change in changes:
-        if [branch for branch, _ in branches if branch in change]:
-            continue
-
-        filtered.append(change)
+        if [branch for branch, _ in branches if branch in change["ref"]]:
+            # Check if this change has a "false positive" comment
+            url = f"https://review.spdk.io/gerrit/changes/{change['id']}/revisions/current/comments/"
+            if (comments := requests.get(url)).status_code != 200:
+                log.info(
+                    f"""Failed to retrieve comments of change 
+                    https://review.spdk.io/gerrit/c/spdk/spdk/+/{change['ref'].split('/')[-2]}. 
+                    HTTP Status Code: {comments.status_code}"""
+                )
+                continue
+            comments = json.loads(comments.text[4:]).get("/PATCHSET_LEVEL", [])
+            if any(re.match(REGEX_FALSE_POSITIVE, comment["message"]) for comment in comments):
+                log.info(
+                    f"""'False Positive' comment on change 
+                    https://review.spdk.io/gerrit/c/spdk/spdk/+/{change['ref'].split('/')[-2]}. 
+                    Re-triggering workflow for this change."""
+                )
+                filtered.append(change["ref"])
+            else:
+                # Drop changes without "false positive"
+                continue
+        filtered.append(change["ref"])
 
     log.info(f"Dropped({len(changes) - len(filtered)}) changes, left({len(filtered)})")
 
