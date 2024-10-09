@@ -70,7 +70,8 @@ def qemu_nvme_args(nvme_img_root):
 
         return [
             "-device",
-            f"xio3130-downstream,id={downstream_bus},bus={upstream_bus},chassis=2,slot={controller_slot}",
+            f"xio3130-downstream,id={downstream_bus},"
+            f"bus={upstream_bus},chassis=2,slot={controller_slot}",
             "-device",
             ",".join(["nvme"] + [f"{k}={v}" for k, v in args.items()]),
         ]
@@ -117,7 +118,8 @@ def qemu_nvme_args(nvme_img_root):
     nvme += ["-device", f"x3130-upstream,id={upstream_bus},bus=pcie_root_port1"]
 
     #
-    # Nvme0 - Controller for functional verification of namespaces with NVM and ZNS command-sets
+    # Nvme0 - Controller for functional verification of namespaces with NVM and ZNS
+    # command-sets
     #
     controller_id1 = "nvme0"
     controller_bus1 = "pcie_downstream_port1"
