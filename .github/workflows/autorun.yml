@@ -21,17 +21,17 @@ jobs:
 
         echo "### Change Information" >> $GITHUB_STEP_SUMMARY
         echo "- **Gerrit Review**: https://review.spdk.io/gerrit/c/spdk/spdk/+/${GERRIT_REVIEW_URL}${PR_NUMBER}" >> $GITHUB_STEP_SUMMARY
-        echo "- **GitHub Branch**: https://github.com/safl/spdk/commits/${{ github.event.inputs.branch }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **GitHub Branch**: https://github.com/${{ github.repository_owner }}/${{ vars.SPDK_REPOS_NAME }}/commits/${{ github.event.inputs.branch }}" >> $GITHUB_STEP_SUMMARY
 
   source-archive:
     runs-on: ubuntu-latest
-    container: ghcr.io/safl/spdk-community-ci:poc
+    container: ghcr.io/${{ github.repository_owner }}/spdk-community-ci:poc
 
     steps:
     - name: Checkout SPDK repository
       uses: actions/checkout@v4.1.7
       with:
-        repository: safl/spdk
+        repository: ${{ github.repository_owner }}/${{ vars.SPDK_REPOS_NAME }}
         ref: ${{ github.event.inputs.branch }}
         token: ${{ secrets.GHPA_TOKEN }}
         submodules: 'recursive'
@@ -56,7 +56,7 @@ jobs:
       REPOSITORY_TARBALL_PATH: ${{ github.workspace }}/repository.tar.gz
 
     container:
-      image: ghcr.io/safl/spdk-community-ci:poc
+      image: ghcr.io/${{ github.repository_owner }}/spdk-community-ci:poc
       options: --privileged
 
     steps:

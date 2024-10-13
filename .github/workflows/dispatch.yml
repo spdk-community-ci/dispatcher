@@ -34,7 +34,7 @@ jobs:
     - name: Checkout SPDK repository
       uses: actions/checkout@v4.1.7
       with:
-        repository: safl/spdk
+        repository: ${{ github.repository_owner }}/${{ vars.SPDK_REPOS_NAME }}
         token: ${{ secrets.GHPA_TOKEN }}
         path: spdk
         fetch-depth: 0

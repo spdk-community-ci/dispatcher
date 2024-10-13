@@ -18,7 +18,7 @@ jobs:
     - name: Checkout SPDK repository
       uses: actions/checkout@v4.1.7
       with:
-        repository: safl/spdk
+        repository: ${{ github.repository_owner }}/${{ vars.SPDK_REPOS_NAME }}
         ref: ${{ github.event.inputs.spdk_repos_ref }}
         token: ${{ secrets.GHPA_TOKEN }}
         submodules: 'recursive'
@@ -29,7 +29,7 @@ jobs:
       run: |
         cd spdk
         CURRENT_REF=$(git rev-parse --short HEAD)  # Gets the short commit hash as the ref
-        REPO_URL="https://github.com/safl/spdk/commit/$CURRENT_REF"
+        REPO_URL="https://github.com/${{ github.repository_owner }}/${{ vars.SPDK_REPOS_NAME }}/commit/$CURRENT_REF"
         echo "### Change Information" >> $GITHUB_STEP_SUMMARY
         echo "- Using pkgdeb.sh and autotest_setup.sh from [SPDK Repository]($REPO_URL)" >> $GITHUB_STEP_SUMMARY
         echo "- Ref: $CURRENT_REF" >> $GITHUB_STEP_SUMMARY
@@ -89,7 +89,7 @@ jobs:
     needs: source-archive
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/safl/spdk-community-ci:poc
+      image: ghcr.io/spdk-community-ci/spdk-community-ci:poc
       options: --privileged
 
     env:
