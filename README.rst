@@ -96,6 +96,31 @@ build_images.yml - build qcow2 Image
   Build .qcow2 image and push it to S3 compatible storage, currently a 1TB
   BackBlaze B2 bucket is utilized.
 
+GitHUB Setup
+------------
+
+Service Account
+~~~~~~~~~~~~~~~
+
+Create a GitHUB service account, this account will be utilized to make pushes to
+the SPDK repository mirror. It will also be the account that will be authorized
+to vote in Gerrit.
+
+Repository Secrets
+~~~~~~~~~~~~~~~~~~
+
+The dispatcher repository needs definition of the following **secrets**:
+
+* GHPA_TOKEN
+* S3_ENDPOINT_URL
+* S3_KEY
+* S3_SECRET
+
+Organization Variables
+~~~~~~~~~~~~~~~~~~~~~~
+
+* SPDK_REPOS_NAME
+
 FAQ
 ---
 
