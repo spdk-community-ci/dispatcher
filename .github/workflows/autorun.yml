@@ -80,6 +80,7 @@ jobs:
       run: |
         cd ci/cijoe
         cijoe \
+        --monitor \
         --config configs/qemuhost-with-guest-fedora-40.toml \
         --workflow workflows/autorun_in_qemu.yaml
 

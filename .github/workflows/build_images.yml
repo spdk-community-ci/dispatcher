@@ -116,8 +116,9 @@ jobs:
       run: |
         cd ci/cijoe
         cijoe \
-        -c configs/qemuhost-with-guest-fedora-40.toml \
-        -w workflows/build_qcow2_using_qemu.yaml
+        --monitor \
+        --config configs/qemuhost-with-guest-fedora-40.toml \
+        --workflow workflows/build_qcow2_using_qemu.yaml
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4.4.0
