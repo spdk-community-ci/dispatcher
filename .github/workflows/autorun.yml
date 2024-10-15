@@ -76,13 +76,23 @@ jobs:
       with:
         name: repository
 
-    - name: Provision qemu-guest and invoke autorun.sh
+    - name: qemu-guest, provision
       run: |
         cd ci/cijoe
-        cijoe \
+        cijoe guest_kill guest_bootimg guest_start guet_misc tgz_transfer tgz_unpack \
         --monitor \
         --config configs/qemuhost-with-guest-fedora-40.toml \
-        --workflow workflows/autorun_in_qemu.yaml
+        --workflow workflows/autorun_in_qemu.yaml \
+        --output report_prep_guest
+
+    - name: qemu-guest, autorun
+      run: |
+        cd ci/cijoe
+        cijoe autorun output_listing retrieve_autorun_output guest_shutdown \
+        --monitor \
+        --config configs/qemuhost-with-guest-fedora-40.toml \
+        --workflow workflows/autorun_in_qemu.yaml \
+        --output report_autorun
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4.4.0
@@ -95,7 +105,9 @@ jobs:
       uses: actions/upload-artifact@v4.4.0
       if: always()
       with:
-        path: ci/cijoe/cijoe-output
+        path: |
+          ci/cijoe/report_autorun
+          ci/cijoe/report_prep_guest
         name: report-autorun-in-qemu
 
   report:
