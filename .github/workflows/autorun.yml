@@ -89,7 +89,7 @@ jobs:
     - name: qemu-guest, provision
       run: |
         cd ci/cijoe
-        cijoe guest_kill guest_bootimg guest_start guet_misc tgz_transfer tgz_unpack \
+        cijoe guest_kill guest_bootimg guest_start guest_misc tgz_transfer tgz_unpack \
         --monitor \
         --config configs/qemuhost-with-guest-fedora-40.toml \
         --workflow workflows/autorun_in_qemu.yaml \
