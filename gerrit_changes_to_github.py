@@ -63,7 +63,8 @@ import sys
 from pathlib import Path
 from pprint import pprint
 from subprocess import CompletedProcess, run
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
+from datetime import datetime
 
 import requests
 
@@ -72,6 +73,11 @@ REGEX_BRANCHES = (
     r"(?P<dir>\d+)\/(?P<change_nr>\d+)\/(?P<patch_nr>\d+)"
 )
 
+# TODO: Currrently set to Mellanox Build Bot account #. Update to Samsung CI bot # when ready.
+SAMSUNG_CI_ACCT_NUM = 1000018
+
+REGEX_VOTE = r"Community-CI([+-]\d)"
+REGEX_COPY_CONDITION = rf"{REGEX_VOTE} has been copied to patch set (\d+)"
 
 def setup_default_logger(log_file: Path):
     """Setup the default logger to log to file and console"""
@@ -159,10 +165,16 @@ def parse_args():
 
     return parser.parse_args()
 
-
-def gerrit_changeinfo_via_rest_api(args) -> Optional[List[str]]:
+def gerrit_changeinfo_via_rest_api(args) -> Optional[List[Dict[str, Union[str, int, List]]]]:
     """
-    Returns a list of refs, retrieved via the Gerrit Rest API, or None on error.
+    Returns a list of refs and change_ids, retrieved via the Gerrit Rest API, or None on error.
+    Return format:
+        [
+         {"ref": ref (str),
+         "change_id": change_id (str),
+         "current_revision_num": current_revision_num (int)
+         "messages": [{JSON msg}, {JSON msg}, ...]}
+        ]
     """
 
     if (response := requests.get(args.gerrit_api_url)).status_code != 200:
@@ -188,8 +200,10 @@ def gerrit_changeinfo_via_rest_api(args) -> Optional[List[str]]:
             if not (ref := meta.get("ref", None)):
                 log.error(f"Unexpected data for change({change})")
                 return None
-
-            refs.append(str(ref))
+            refs.append({"ref":str(ref),
+                        "id":change.get("change_id"),
+                        "messages":change.get("messages"),
+                        "current_revision_number":change.get("current_revision_number")})
 
     if len(remotes) != 1:  # There should only be a single anonymous gerrit remote
         log.error(f"Unexpected remotes({remotes})")
@@ -198,7 +212,7 @@ def gerrit_changeinfo_via_rest_api(args) -> Optional[List[str]]:
     # Be verbose; it makes it easier to understand what is going on by inspecting the
     # output of the command in a CI log and even when running it manually
     for ref in refs:
-        log.info(f"Got ref({ref}) via REST API")
+        log.info(f"Got ref({ref["ref"]}) via REST API")
     log.info(f"A total of {len(refs)} changes retrieved.")
     if len(refs) >= args.limit:
         log.info(
@@ -230,10 +244,45 @@ def changes_apply_filter(args, changes, branches) -> List[str]:
 
     filtered = []
     for change in changes:
-        if [branch for branch, _ in branches if branch in change]:
-            continue
+        if [branch for branch, _ in branches if branch in change["ref"]]:
+            # Check if this change already has a +1 vote from "Community CI Samsung" for current revision
+            all_samsung_votes = [message for message in change["messages"]
+                            if message["author"]["_account_id"] == SAMSUNG_CI_ACCT_NUM]
 
-        filtered.append(change)
+            current_vote = [vote for vote in all_samsung_votes
+                                if (all_samsung_votes and vote["_revision_number"] == change["current_revision_number"])]
+            
+            # Add this change to refs if there is no vote from Samsung CI yet on this revision
+            if not current_vote:
+                # Check if a previous vote was copied to the first patch
+                # Look for most recent "Community-CI{vote} has been copied to patch set {x}" message.
+                most_recent_copied_vote = max(
+                                    [
+                                        vote for vote in all_samsung_votes
+                                        if re.search(REGEX_COPY_CONDITION, vote["message"])
+                                    ],
+                                    # Truncate fractional seconds in timestamp
+                                    key=lambda vote: datetime.strptime(vote["date"][:-10], "%Y-%m-%d %H:%M:%S"),
+                                    default = None
+                                )
+                
+                # A previous vote was copied and applies to this revision
+                if most_recent_copied_vote and int(re.search(REGEX_COPY_CONDITION, most_recent_copied_vote["message"]).group(2)) == change["current_revision_number"]:
+                    log.info(f"Previous vote copied for change {change["ref"]}. Dropping")
+                    continue
+                
+                # A vote, copied or otherwise, does not exist for this revision
+                log.info(f"Branch exists but no vote for change {change["ref"]} yet. Appending")
+                filtered.append(change["ref"])
+                continue
+
+            # Skip changes we have already voted on            
+            log.info(f"Already voted on ref {change["ref"]}. Dropping.")
+            continue
+        
+        # No workflow triggered for this change yet
+        log.info(f"No branch for change {change["ref"]}. Appending.")
+        filtered.append(change["ref"])
 
     log.info(f"Dropped({len(changes) - len(filtered)}) changes, left({len(filtered)})")
 
