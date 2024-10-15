@@ -15,7 +15,7 @@ steps:
 - name: guest_bootimg
   uses: qemu.guest_init_using_bootimage
 
-- name: guest_firstboot
+- name: guest_start
   uses: qemu_guest_start_custom_nvme
 
 - name: guest_misc
