@@ -60,6 +60,16 @@ jobs:
       options: --privileged
 
     steps:
+    - name: Runner-prep, clean up self-hosted left-overs
+      run: |
+        ls -lh
+        ps aux | grep qemu || true
+        pkill -f qemu || true
+        rm -rf $HOME/guests || true 
+        rm -rf * || true
+        ps aux | grep qemu || true
+        ls -lh
+
     - name: Setup CIJOE and pipx
       run: |
         pipx install cijoe -f
