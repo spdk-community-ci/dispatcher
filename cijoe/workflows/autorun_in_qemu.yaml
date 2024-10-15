@@ -22,9 +22,6 @@ steps:
   run: |
     hostname
     uname -a
-    dnf update -y
-    dnf autoremove -y
-    dnf install -y git perl-JSON-PP
 
 - name: tgz_transfer
   uses: core.put

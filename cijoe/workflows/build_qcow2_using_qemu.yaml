@@ -31,8 +31,8 @@ steps:
 - name: guest_update
   run: |
     dnf update -y
+    dnf install -y git perl-JSON-PP
     dnf autoremove -y
-    dnf install -y git
 
 - name: guest_info
   uses: linux.sysinfo
