@@ -53,8 +53,6 @@ The changes are processed in the order they are retrieved, consequently then cha
 501 least recently updated will be "starved". This can be fixed by modifying the range
 of received changes, however, has been kept out for this initial prototype of the
 integration.
-
-test
 """
 import argparse
 import json
@@ -65,7 +63,8 @@ import sys
 from pathlib import Path
 from pprint import pprint
 from subprocess import CompletedProcess, run
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
+from datetime import datetime
 
 import requests
 
@@ -74,7 +73,10 @@ REGEX_BRANCHES = (
     r"(?P<dir>\d+)\/(?P<change_nr>\d+)\/(?P<patch_nr>\d+)"
 )
 
-REGEX_FALSE_POSITIVE = r"false positive: \d{4}"
+REGEX_FALSE_POSITIVE = r"false positive:\s*(\d+)$"
+
+# TODO: Currrently set to SPDK Jenkins CI account #. Update to Samsung CI bot # when ready.
+SAMSUNG_CI_ACCT_NUM = 1000018
 
 def setup_default_logger(log_file: Path):
     """Setup the default logger to log to file and console"""
@@ -162,7 +164,7 @@ def parse_args():
 
     return parser.parse_args()
 
-def gerrit_changeinfo_via_rest_api(args) -> Optional[List[Dict[str, str]]]:
+def gerrit_changeinfo_via_rest_api(args) -> Optional[List[Dict[str, Union[str, List]]]]:
     """
     Returns a list of refs and change_ids, retrieved via the Gerrit Rest API, or None on error.
     Return format:
@@ -192,7 +194,10 @@ def gerrit_changeinfo_via_rest_api(args) -> Optional[List[Dict[str, str]]]:
             if not (ref := meta.get("ref", None)):
                 log.error(f"Unexpected data for change({change})")
                 return None
-            refs.append({"ref":str(ref), "id":change.get("change_id")})
+            refs.append({"ref":str(ref),
+                        "id":change.get("change_id"),
+                        "messages":change.get("messages"),
+                        "current_revision_number":change.get("current_revision_number")})
 
     if len(remotes) != 1:  # There should only be a single anonymous gerrit remote
         log.error(f"Unexpected remotes({remotes})")
@@ -234,26 +239,60 @@ def changes_apply_filter(args, changes, branches) -> List[str]:
     filtered = []
     for change in changes:
         if [branch for branch, _ in branches if branch in change["ref"]]:
-            # Check if this change has a "false positive" comment
-            url = f"https://review.spdk.io/gerrit/changes/{change['id']}/revisions/current/comments/"
-            if (comments := requests.get(url)).status_code != 200:
-                log.info(
+            # Check if this change has a -1 vote from "Community CI Samsung"
+            if (samsung_ci_vote := [message for message in change["messages"]
+                if (message["author"]["_account_id"] == SAMSUNG_CI_ACCT_NUM
+                and "Verified-1" in message["message"]
+                and message["_revision_number"] == change["current_revision_number"])]):
+
+                url = f"https://review.spdk.io/gerrit/changes/{change['id']}/revisions/current/comments/"
+                if (comments := requests.get(url)).status_code != 200:
+                    print("Error while retrieving comments")
+                    log.info(
                     f"""Failed to retrieve comments of change 
                     https://review.spdk.io/gerrit/c/spdk/spdk/+/{change['ref'].split('/')[-2]}. 
                     HTTP Status Code: {comments.status_code}"""
-                )
-                continue
-            comments = json.loads(comments.text[4:]).get("/PATCHSET_LEVEL", [])
-            if any(re.match(REGEX_FALSE_POSITIVE, comment["message"]) for comment in comments):
+                    )
+                    continue
+
+                # Look for "false positive comments with timestamp > the -1 vote"
+                comments = json.loads(comments.text[4:]).get("/PATCHSET_LEVEL", [])
+
+                # There should only be 1 element in the list because we are getting the most recent review and
+                # bot only votes once per review. "Unwrap" from the list.
+                samsung_ci_vote = samsung_ci_vote[0]
+
+                if (false_pos_comment :=
+                    [comment for comment in comments if re.match(REGEX_FALSE_POSITIVE, comment["message"]) is not None
+                    and comment["updated"] > samsung_ci_vote["date"]]):
+
+                    # Check that false positive comment contains issue num at the end
+                    issue_num = re.search(REGEX_FALSE_POSITIVE, false_pos_comment[0]["message"])
+                    if not issue_num:
+                        log.info(f"'False Positive' comment did not include issue num")
+                        continue
+
+                    # Check that issue num corresponds to a GitHub issue with "intermittent failure" tag
+                    url = f"https://api.github.com/repos/spdk/spdk/issues/{issue_num}"
+                    if (issue := requests.get(url)).status_code != 200:
+                        log.info(
+                        f"Issue Number {issue_num} is not valid GitHub issue number. CI will not be rerun."
+                        )
+                        continue
+                    if not [label["name"] == "Intermittent Failure" for label in issue["labels"]]:
+                        log.info(f"Issue Number {issue_num} is not tagged 'Intermittent Failure' on GitHub. CI will not be rerun.")
+                        continue
+
+                # Re-run CI for this change
                 log.info(
-                    f"""'False Positive' comment on change 
-                    https://review.spdk.io/gerrit/c/spdk/spdk/+/{change['ref'].split('/')[-2]}. 
-                    Re-triggering workflow for this change."""
-                )
+                f"""'False Positive' comment on change
+                     https://review.spdk.io/gerrit/c/spdk/spdk/+/{change['ref'].split('/')[-2]}.
+                     Re-running workflow for this change."""
+                    )
                 filtered.append(change["ref"])
-            else:
-                # Drop changes without "false positive"
-                continue
+
+            # Drop changes without -1 vote from "Community CI Samsung"
+            continue
         filtered.append(change["ref"])
 
     log.info(f"Dropped({len(changes) - len(filtered)}) changes, left({len(filtered)})")
