@@ -36,7 +36,10 @@ steps:
     
 - name: autorun
   run: |
-    echo "SPDK_TEST_UNITTEST=1" > /tmp/auto.conf
+    cat <<-CONF >/tmp/auto.conf
+      SPDK_TEST_UNITTEST=1
+      SPDK_RUN_FUNCTIONAL_TEST=1
+    CONF  
     /opt/spdk/autorun.sh /tmp/auto.conf
 
 - name: output_listing
