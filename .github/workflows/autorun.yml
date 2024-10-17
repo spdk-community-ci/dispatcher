@@ -130,6 +130,8 @@ jobs:
     steps:
     - name: Conditional behavior based on job status
       run: |
+        set -e
+
         PR_NUMBER=$(echo "${{ github.event.inputs.branch }}" | cut -d '/' -f 3)
         REV=$(echo "${{ github.event.inputs.branch }}" | cut -d '/' -f 4)
 
