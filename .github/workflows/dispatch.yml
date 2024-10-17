@@ -3,14 +3,14 @@ name: dispatch
 
 on:
   schedule:
-  - cron: '0 * * * *'
+  - cron: '*/15 * * * *'
 
   workflow_dispatch:
     inputs:
       limit:
         description: '--limit'
         required: false
-        default: 2 # If you change this, then also address CHANGES_LIMIT
+        default: 5 # If you change this, then also address CHANGES_LIMIT
 
 jobs:
   gerrit_to_github:
@@ -46,7 +46,7 @@ jobs:
 
     - name: Retrieve Changes from Gerrit, Push to GitHub and trigger!
       env:
-        CHANGES_LIMIT: ${{ github.event.inputs.limit || 2 }}
+        CHANGES_LIMIT: ${{ github.event.inputs.limit || 5 }}
         GHPA_TOKEN: ${{ secrets.GHPA_TOKEN }}
       run: |
         ./ci/gerrit_changes_to_github.py \
