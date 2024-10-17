@@ -50,7 +50,7 @@ jobs:
         GHPA_TOKEN: ${{ secrets.GHPA_TOKEN }}
       run: |
         ./ci/gerrit_changes_to_github.py \
-          --gerrit-api-url "https://review.spdk.io/gerrit/changes/?q=status:open+repo:spdk/spdk&o=CURRENT_REVISION" \
+          --gerrit-api-url "https://review.spdk.io/gerrit/changes/?q=status:open+repo:spdk/spdk+-label:Community-CI=ANY,user=spdk-community-ci-samsung&o=CURRENT_REVISION" \
           --git-repository-path spdk \
           --git-remote-target-name origin \
           --git-remote-gerrit-name gerrit \
