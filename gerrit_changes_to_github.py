@@ -225,8 +225,8 @@ def branches_on_target(args) -> Optional[List[Tuple[str, Dict]]]:
     ]
 
 
-def changes_apply_filter(args, changes, branches) -> List[str]:
-    """Drop changes for which branches already exist"""
+def changes_apply_branch_filter(args, changes, branches) -> List[str]:
+    """Filter out changes for which branches already exist"""
 
     filtered = []
     for change in changes:
@@ -235,7 +235,8 @@ def changes_apply_filter(args, changes, branches) -> List[str]:
 
         filtered.append(change)
 
-    log.info(f"Dropped({len(changes) - len(filtered)}) changes, left({len(filtered)})")
+    log.info(f"{len(changes) - len(filtered)} changes already have branches")
+    log.info(f"{len(filtered)} changes need branches created")
 
     return filtered
 
@@ -305,7 +306,9 @@ def main(args):
         log.error("Failed retrieving branches")
         return 1
 
-    if (changes_to_push := changes_apply_filter(args, changes, branches)) is None:
+    if (
+        changes_to_push := changes_apply_branch_filter(args, changes, branches)
+    ) is None:
         log.error("Failed filtering changes")
         return 1
 
@@ -324,6 +327,11 @@ def main(args):
             if proc.returncode:
                 log.error("Stopping due to errors during fetch/push")
                 return proc.returncode
+
+    for count, ref in enumerate(changes, 1):
+        if count > args.limit:
+            log.info(f"Pushed count({count}), stopping due to limit({args.limit})")
+            break
 
         # Trigger the workflow-dispatch event with the branch name as input
         for workflow in args.workflows:
