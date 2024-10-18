@@ -191,7 +191,8 @@ def gerrit_changeinfo_via_rest_api(args) -> Optional[List[str]]:
 
             refs.append(str(ref))
 
-    if len(remotes) != 1:  # There should only be a single anonymous gerrit remote
+    # If there are changes, they should all be for a single anonymous gerrit remote
+    if len(remotes) > 1:
         log.error(f"Unexpected remotes({remotes})")
         return None
 
