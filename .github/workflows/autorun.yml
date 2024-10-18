@@ -51,6 +51,7 @@ jobs:
 
   autorun_unittest:
     needs: source-archive
+    timeout-minutes: 15
     runs-on: [self-hosted, linux, x64, qemuhost]
     env:
       REPOSITORY_TARBALL_PATH: ${{ github.workspace }}/repository.tar.gz
@@ -135,12 +136,12 @@ jobs:
         PR_NUMBER=$(echo "${{ github.event.inputs.branch }}" | cut -d '/' -f 3)
         REV=$(echo "${{ github.event.inputs.branch }}" | cut -d '/' -f 4)
 
-        if [[ "${{ needs.autorun_unittest.result }}" == "failure" ]]; then
-          echo "One or more jobs failed."
-          VOTE=-1
-        else
+        if [[ "${{ needs.autorun_unittest.result }}" == "success" ]]; then
           echo "All jobs succeeded."
           VOTE=1
+        else
+          echo "One or more jobs failed."
+          VOTE=-1
         fi
 
         curl -X POST https://review.spdk.io/gerrit/a/changes/$PR_NUMBER/revisions/$REV/review \
