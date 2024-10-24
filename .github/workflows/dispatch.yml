@@ -43,11 +43,32 @@ jobs:
       run: |
         git -C spdk remote add gerrit https://review.spdk.io/gerrit/spdk/spdk
         git -C spdk fetch gerrit
+        
+    - name: Download previous timestamp
+      id: check_artifact
+      run: |
+        echo "Checking for the last_timestamp artifact..."
+        # List all artifacts and check if "last_timestamp" exists
+        artifacts=$(gh run list --json artifacts | jq -r '.[] | .artifacts[].name')
+        if echo "$artifacts" | grep -q "last_timestamp"; then
+          echo "Artifact 'last_timestamp' found."
+          echo "::set-output name=artifact_exists::true"
+        else
+          echo "Artifact 'last_timestamp' not found."
+          echo "::set-output name=artifact_exists::false"
+        fi
+
+    - name: Download previous timestamp
+      if: steps.check_artifact.outputs.artifact_exists == 'true'
+      uses: actions/download-artifact@v4
+      with:
+        name: my-artifact
 
     - name: Retrieve Changes from Gerrit, Push to GitHub and trigger!
       env:
         CHANGES_LIMIT: ${{ github.event.inputs.limit || 5 }}
         GHPA_TOKEN: ${{ secrets.GHPA_TOKEN }}
+        GERRIT_PASSWORD: ${{ secrets.GERRIT_PASSWORD}}
       run: |
         ./ci/gerrit_changes_to_github.py \
           --gerrit-api-url "https://review.spdk.io/gerrit/changes/?q=status:open+-age:6mon+repo:spdk/spdk+-label:Community-CI=ANY,user=spdk-community-ci-samsung+-%22%5BRFC%5D%22&o=CURRENT_REVISION" \
@@ -56,9 +77,16 @@ jobs:
           --git-remote-gerrit-name gerrit \
           --workflows autorun.yml \
           --log gerrit_changes_to_github.log \
+          --timestamp last_timestamp.txt
           --limit ${CHANGES_LIMIT}
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4.4.0
       with:
         path: gerrit_changes_to_github.log
+    
+    - name: Save Last Timestamp
+      uses: actions/upload-artifact@v4.4.0
+      with:
+        name: last_timestamp
+        path: last_timestamp.txt

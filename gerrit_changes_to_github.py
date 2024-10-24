@@ -45,6 +45,7 @@ GITHUB_REPOSITORY
 Caveat
 ------
 
+# TODO: Update documentation on using events-log
 The Gerrit REST API returns a maximum of 500 changes per request, ordered by most recent
 update. If there are more than 500 changes, the 501st least recently updated change will
 not be retrieved or processed by this script.
@@ -64,6 +65,8 @@ from pathlib import Path
 from pprint import pprint
 from subprocess import CompletedProcess, run
 from typing import Dict, List, Optional, Tuple
+from pygerrit2 import GerritRestAPI, HTTPBasicAuth
+from datetime import datetime
 
 import requests
 
@@ -157,90 +160,14 @@ def parse_args():
         help="Name of the one or more workflow(s) to trigger; e.g. 'myworkflow.yml'",
     )
 
+    parser.add_argument(
+        "--timestamp",
+        type=Path,
+        help="Path to save last timestamp",
+        default=Path.cwd() / "last_timestamp.txt"
+    )
+
     return parser.parse_args()
-
-
-def gerrit_changeinfo_via_rest_api(args) -> Optional[List[str]]:
-    """
-    Returns a list of refs, retrieved via the Gerrit Rest API, or None on error.
-    """
-
-    if (response := requests.get(args.gerrit_api_url)).status_code != 200:
-        log.error(
-            f"Failed to retrieve changes. HTTP Status Code: {response.status_code}"
-        )
-        return None
-
-    response_text = response.text[4:]
-
-    remotes = set()
-    refs = []
-    for change in json.loads(response_text):
-        for sha, meta in change.get("revisions", {}).items():
-            remote = meta.get("fetch", {}).get("anonymous http", {}).get("url", None)
-            if not remote:
-                log.error(f"No remote for change({change})")
-                return None
-
-            remotes.add(remote)
-            log.info(f"change: sha({sha}), meta({meta.get('fetch')})")
-
-            if not (ref := meta.get("ref", None)):
-                log.error(f"Unexpected data for change({change})")
-                return None
-
-            refs.append(str(ref))
-
-    # If there are changes, they should all be for a single anonymous gerrit remote
-    if len(remotes) > 1:
-        log.error(f"Unexpected remotes({remotes})")
-        return None
-
-    # Be verbose; it makes it easier to understand what is going on by inspecting the
-    # output of the command in a CI log and even when running it manually
-    for ref in refs:
-        log.info(f"Got ref({ref}) via REST API")
-    log.info(f"A total of {len(refs)} changes retrieved.")
-    if len(refs) >= args.limit:
-        log.info(
-            f"There is likely more to process, as n equals the limit({args.limit})"
-        )
-
-    return refs
-
-
-def branches_on_target(args) -> Optional[List[Tuple[str, Dict]]]:
-    """Retrieve branches carrying changes"""
-
-    cmd = f"git ls-remote --branches {args.git_remote_target_name}"
-    if (proc := run_cmd(cmd, cwd=args.git_repository_path)).returncode:
-        return None
-
-    return [
-        (
-            f"changes/{info['dir']}/{info['change_nr']}/{info['patch_nr']}",
-            dict(info.groupdict()),
-        )
-        for branch in proc.stdout.strip().splitlines()
-        if (info := re.match(REGEX_BRANCHES, branch.strip()))
-    ]
-
-
-def changes_apply_branch_filter(args, changes, branches) -> List[str]:
-    """Filter out changes for which branches already exist"""
-
-    filtered = []
-    for change in changes:
-        if [branch for branch, _ in branches if branch in change]:
-            continue
-
-        filtered.append(change)
-
-    log.info(f"{len(changes) - len(filtered)} changes already have branches")
-    log.info(f"{len(filtered)} changes need branches created")
-
-    return filtered
-
 
 def is_repository_usable(args):
     """Verify that the cloned repository(args.repository) has the expected remotes"""
@@ -270,6 +197,74 @@ def is_repository_usable(args):
 
     return got_gerrit and got_target
 
+def get_changes_from_event_logs(args, gerrit_password):
+    """Go through all events since the latest timestamp"""
+
+    latest_timestamp = 0
+    try:
+        with open(args.timestamp, 'r') as f:
+            latest_timestamp = int(f.read().strip())
+
+    except Exception as e:
+        log.error(f"Error while reading last timestamp: {e}")
+
+        # TODO: Change this later
+        # Set random default timestamp for now
+        latest_timestamp = 1729791225
+
+    latest_ts_as_date = datetime.fromtimestamp(latest_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    log.info(f"Using last timestamp: {latest_ts_as_date}")
+
+    auth = HTTPBasicAuth('spdk-community-ci-samsung', gerrit_password)
+    rest = GerritRestAPI(url='https://review.spdk.io', auth=auth)
+    changes = rest.get(f"plugins/events-log/events/?t1={latest_ts_as_date}")
+
+    changes = changes.replace("}{", "},{").replace("}\n{", "},{")
+
+    changes = json.loads(f"[{changes}]")
+
+    t1 = latest_timestamp
+    refs = []
+    timestamps = []
+
+    errors = 0
+    for change in changes:
+        if change.get("eventCreatedOn") < t1:
+            errors +=1
+
+        latest_timestamp = change.get("eventCreatedOn") if change.get("eventCreatedOn") > latest_timestamp else latest_timestamp
+
+        ts = change.get('eventCreatedOn')
+        # Get new changes and new revisions on existing changes
+        if change.get("type") == "patchset-created":
+            refs.append(change.get("patchSet").get("ref"))
+            timestamps.append(f"{datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')}")
+        # Get changes marked "false positive"
+        elif change.get("type") == "comment-added" and "false positive" in change.get("comment"):
+            refs.append(change.get("patchSet").get("ref"))
+            timestamps.append(f"{datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')}")
+
+    # Be verbose; it makes it easier to understand what is going on by inspecting the
+    # output of the command in a CI log and even when running it manually
+    for i in range(len(refs)):
+        log.info(f"Got ref({refs[i]}) via REST API with timestamp {timestamps[i]}")
+    log.info(f"A total of {len(refs)} changes retrieved.")
+    if len(refs) >= args.limit:
+        log.info(
+            f"There is likely more to process, as n equals the limit({args.limit})"
+        )
+
+    log.info(
+            f"Saving last timestamp: {datetime.fromtimestamp(latest_timestamp).strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+
+    if errors:
+        log.error(f"Gerrit query returned {errors} changes with timestamp less than t1:{latest_ts_as_date} out of {len(changes)} total changes")
+    # Save latest_timestamp as an artifact
+    with open(args.timestamp, 'w') as f:
+        f.write(str(latest_timestamp))
+
+    return refs
 
 def main(args):
     """Entry-point for the script; see parse_args() for the arguments"""
@@ -299,21 +294,15 @@ def main(args):
         log.error("GHPA_TOKEN is not set; should contain personal access token")
         return 1
 
-    if (changes := gerrit_changeinfo_via_rest_api(args)) is None:
+    if (gerrit_password := os.getenv("GERRIT_PASSWORD", None)) is None:
+        log.error("GERRIT_PASSWORD is not set")
+        return 1
+
+    if (changes := get_changes_from_event_logs(args, gerrit_password)) is None:
         log.error("Failed retrieving changes")
         return 1
 
-    if (branches := branches_on_target(args)) is None:
-        log.error("Failed retrieving branches")
-        return 1
-
-    if (
-        changes_to_push := changes_apply_branch_filter(args, changes, branches)
-    ) is None:
-        log.error("Failed filtering changes")
-        return 1
-
-    for count, ref in enumerate(changes_to_push, 1):
+    for count, ref in enumerate(changes, 1):
         if count > args.limit:
             log.info(f"Pushed count({count}), stopping due to limit({args.limit})")
             break
