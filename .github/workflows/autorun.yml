@@ -147,4 +147,5 @@ jobs:
         curl -X POST https://review.spdk.io/gerrit/a/changes/$PR_NUMBER/revisions/$REV/review \
           -H "Content-Type: application/json" \
           -d "{ 'message': '$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID', 'labels': {'Community-CI': $VOTE}}" \
-          --user "spdk-community-ci-samsung:${{ secrets.GERRIT_PASSWORD }}"
+          --user "spdk-community-ci-samsung:${{ secrets.GERRIT_PASSWORD }}" \
+          --fail-with-body
