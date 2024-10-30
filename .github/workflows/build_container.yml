@@ -14,6 +14,10 @@ jobs:
     env:
       IMAGE_ID: ghcr.io/${{ github.repository_owner }}/spdk-community-ci:poc
 
+    concurrency:
+      group: build_container
+      cancel-in-progress: false
+
     steps:
     - name: Checkout CI repository
       uses: actions/checkout@v4.1.7
