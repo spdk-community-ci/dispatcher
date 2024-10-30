@@ -19,6 +19,10 @@ jobs:
       contents: write
       actions: write
 
+    concurrency:
+      group: dispatcher
+      cancel-in-progress: false
+
     steps:
     - name: Change git config for GitHub Service Account
       run: |
