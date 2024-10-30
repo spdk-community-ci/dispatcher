@@ -19,9 +19,9 @@ jobs:
 
     steps:
       - name: Get Runner Name
-        run: echo "This is running on runner ${{ runner.name }}"
-
-      - name: Maintenance Task
         run: |
-          # Your maintenance script or commands
-          echo "Running maintenance on ${{ runner.name }}"
+          echo "This is running on runner ${{ runner.name }}"
+
+      - name: Remove qcow images
+        run: |
+          rm -rf $HOME/images
