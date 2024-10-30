@@ -96,14 +96,33 @@ jobs:
         --workflow workflows/autorun_in_qemu.yaml \
         --output report_prep_guest
 
-    - name: qemu-guest, autorun
+    - name: qemu-guest, autorun_unittest
       run: |
         cd ci/cijoe
-        cijoe autorun output_listing retrieve_autorun_output guest_shutdown \
+        cijoe autorun_unittest \
         --monitor \
         --config configs/qemuhost-with-guest-fedora-40.toml \
         --workflow workflows/autorun_in_qemu.yaml \
-        --output report_autorun
+        --output report_autorun_unittest
+
+    - name: qemu-guest, autorun_nvme
+      run: |
+        cd ci/cijoe
+        cijoe autorun_nvme \
+        --monitor \
+        --config configs/qemuhost-with-guest-fedora-40.toml \
+        --workflow workflows/autorun_in_qemu.yaml \
+        --output report_autorun_nvme
+
+    - name: qemu-guest, cleanup
+      if: always()
+      run: |
+        cd ci/cijoe
+        cijoe output_listing retrieve_autorun_output guest_shutdown \
+        --monitor \
+        --config configs/qemuhost-with-guest-fedora-40.toml \
+        --workflow workflows/autorun_in_qemu.yaml \
+        --output report_cleanup
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4.4.0
@@ -117,7 +136,9 @@ jobs:
       if: always()
       with:
         path: |
-          ci/cijoe/report_autorun
+          ci/cijoe/report_autorun_nvme
+          ci/cijoe/report_autorun_unittest
+          ci/cijoe/report_cleanup
           ci/cijoe/report_prep_guest
         name: report-autorun-in-qemu
 

@@ -34,10 +34,18 @@ steps:
     mkdir /opt/spdk
     tar xzf /tmp/repository.tar.gz -C /opt/spdk
     
-- name: autorun
+- name: autorun_unittest
   run: |
+    mkdir -p /opt/output/unittest
     echo "SPDK_TEST_UNITTEST=1" > /tmp/auto.conf
-    /opt/spdk/autorun.sh /tmp/auto.conf
+    output_dir=/opt/output/unittest /opt/spdk/autorun.sh /tmp/auto.conf
+
+- name: autorun_nvme
+  run: |
+    mkdir -p /opt/output/nvme
+    echo "SPDK_RUN_FUNCTIONAL_TEST=1" > /tmp/auto.conf
+    echo "SPDK_TEST_NVME=1" >> /tmp/auto.conf
+    output_dir=/opt/output/nvme /opt/spdk/autorun.sh /tmp/auto.conf
 
 - name: output_listing
   run: |

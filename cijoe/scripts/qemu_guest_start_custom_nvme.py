@@ -230,20 +230,6 @@ def qemu_nvme_args(nvme_img_root):
     nvme += qemu_nvme_dev_pi3
     drives.append(drv_pi3)
 
-    # Nvme4n4 - NVM namespace with PI type 1 and extended LBA
-    drv_pi1_ex, qemu_nvme_dev_pi1_ex = namespace(
-        controller_id5, 4, {"ms": 8, "mset": 1, "pi": 1}
-    )
-    nvme += qemu_nvme_dev_pi1_ex
-    drives.append(drv_pi1_ex)
-
-    # Nvme4n5 - NVM namespace with PI type 1 and PIF 2
-    drv_pi1_pif2, qemu_nvme_dev_pi1_pif2 = namespace(
-        controller_id5, 5, {"ms": 16, "pi": 1, "pif": 2}
-    )
-    nvme += qemu_nvme_dev_pi1_pif2
-    drives.append(drv_pi1_pif2)
-
     return drives, nvme
 
 
