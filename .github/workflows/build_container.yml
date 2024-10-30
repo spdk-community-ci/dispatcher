@@ -25,7 +25,7 @@ jobs:
         docker build \
         -t $IMAGE_ID \
         -f ci/dockerfiles/fedora/Dockerfile \
-        spdk
+        .
 
     - name: Log into GitHub Container Registry
       run: |
