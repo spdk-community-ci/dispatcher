@@ -121,4 +121,4 @@ jobs:
         ./ci/s3_file_upload.py fedora_40_x86_64.qcow2 \
         --bucket "$S3_BUCKET" \
         --endpoint-url "$S3_ENDPOINT_URL" \
-        --object-key "system/fedora_40_x86_64.staging.qcow2"
+        --object-key "system/fedora_40_x86_64.qcow2"
