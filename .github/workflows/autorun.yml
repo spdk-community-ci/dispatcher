@@ -51,7 +51,7 @@ jobs:
 
   autorun_unittest:
     needs: source-archive
-    timeout-minutes: 15
+    timeout-minutes: 35
     runs-on: [self-hosted, linux, x64, qemuhost]
     env:
       REPOSITORY_TARBALL_PATH: ${{ github.workspace }}/repository.tar.gz
