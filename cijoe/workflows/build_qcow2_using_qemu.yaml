@@ -51,7 +51,7 @@ steps:
 - name: pkgdep_and_autotest_setup
   run: |
     /tmp/spdk/scripts/pkgdep.sh -a
-    INSTALL_FLAMEGRAPH=true INSTALL_FIO=true /tmp/spdk/test/common/config/autotest_setup.sh --install-deps --upgrade --test-conf="lcov"
+    INSTALL_FLAMEGRAPH=true INSTALL_FIO=true INSTALL_NVMECLI=true /tmp/spdk/test/common/config/autotest_setup.sh --install-deps --upgrade --test-conf="lcov"
     
 - name: guest_shutdown
   run: |
