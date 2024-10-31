@@ -320,14 +320,18 @@ def main(args):
 
         # git-fetch the change from Gerrit and git-push it to GitHub
         dst = ref.replace("refs/", "refs/heads/")
-        for cmd in [
-            f"git fetch {args.git_remote_gerrit_name} {ref}",
-            f"git push {args.git_remote_target_name} FETCH_HEAD:{dst} --no-verify",
-        ]:
-            proc = run_cmd(cmd, cwd=args.git_repository_path)
-            if proc.returncode:
-                log.error("Stopping due to errors during fetch/push")
-                return proc.returncode
+        fetch_cmd = f"git fetch {args.git_remote_gerrit_name} {ref}"
+        proc = run_cmd(fetch_cmd, cwd=args.git_repository_path)
+        if proc.returncode:
+            log.info(f"Error during fetch, skipping {ref}")
+            continue
+        push_cmd = (
+            f"git push {args.git_remote_target_name} FETCH_HEAD:{dst} --no-verify"
+        )
+        proc = run_cmd(push_cmd, cwd=args.git_repository_path)
+        if proc.returncode:
+            log.error(f"Stopping due to errors during push: {ref}")
+            return proc.returncode
 
     for count, ref in enumerate(changes, 1):
         if count > args.limit:
