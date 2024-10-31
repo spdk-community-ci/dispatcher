@@ -17,6 +17,10 @@ jobs:
 
     runs-on: ${{ matrix.runner }}
 
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/spdk-community-ci:poc
+      options: --privileged
+
     steps:
       - name: Get Runner Name
         run: |
@@ -24,4 +28,7 @@ jobs:
 
       - name: Remove qcow images
         run: |
+          ls $HOME
+          ls $HOME/images
+          ls $HOME/
           rm -rf $HOME/images
