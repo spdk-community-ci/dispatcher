@@ -42,6 +42,13 @@ GITHUB_REPOSITORY
   that it is set accordingly. This is the name of the CI repository, not the repository
   with changes etc.
 
+GERRIT_PASSWORD
+  Gerrit HTTP Authentication password, needed to access Gerrit's events-log plugin.
+
+LAST_TIMESTAMP
+  The dispatch workflow pulls events that have occured since LAST_TIMESTAMP from
+  Gerrit events-log then updates it with the most recent timestamp.
+
 Caveat
 ------
 
@@ -60,6 +67,7 @@ import logging as log
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from pprint import pprint
 from subprocess import CompletedProcess, run
@@ -155,6 +163,24 @@ def parse_args():
         type=str,
         nargs="+",
         help="Name of the one or more workflow(s) to trigger; e.g. 'myworkflow.yml'",
+    )
+
+    parser.add_argument(
+        "--gerrit-username",
+        type=str,
+        help="Gerrit username of Samsung Bot for Gerrit REST API authorization",
+    )
+
+    parser.add_argument(
+        "--gerrit-events-log-url",
+        type=str,
+        help="URL to utilize to query the Gerrit REST API events-log plugin",
+    )
+
+    parser.add_argument(
+        "--gh-variables-url",
+        type=str,
+        help="GitHub REST API endpoint URL to update dispatcher repository variables",
     )
 
     return parser.parse_args()
@@ -271,6 +297,85 @@ def is_repository_usable(args):
     return got_gerrit and got_target
 
 
+def get_events_from_gerrit(args, gerrit_password, ghpa_token):
+    """On success a list of event-dicts are returned. On error, None is returned."""
+
+    try:
+        last_timestamp = int(os.getenv("LAST_TIMESTAMP"))
+    except Exception as e:
+        log.error(f"Error reading LAST_TIMESTAMP env. var.; err({e})")
+        return
+
+    since = datetime.fromtimestamp(last_timestamp, tz=timezone.utc).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    log.info(f"Using last timestamp (UTC): {since}")
+
+    # Set t2 cutoff to avoid getting a fraction of events for a particular second
+    last_timestamp = int(datetime.now().timestamp()) - 1
+    until = datetime.fromtimestamp(last_timestamp, tz=timezone.utc).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    if (
+        response := requests.get(
+            f"{args.gerrit_events_log_url}/?t1={since};t2={until}",
+            auth=(args.gerrit_username, gerrit_password),
+        )
+    ).status_code != 200:
+        log.error(
+            f"Failed to retrieve events. HTTP Status Code: {response.status_code}"
+        )
+        return None
+
+    # Update Github variable LAST_TIMESTAMP
+    last_timestamp += 1
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "Authorization": f"token {ghpa_token}",
+    }
+    data = {"value": f"{last_timestamp}"}
+
+    ts_as_str = datetime.fromtimestamp(last_timestamp, tz=timezone.utc).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    log.info(f"Saving last timestamp (UTC): {ts_as_str}")
+
+    if (
+        requests.patch(
+            f"{args.gh_variables_url}LAST_TIMESTAMP",
+            headers=headers,
+            json=data,
+            timeout=5,
+        ).status_code
+        != 204
+    ):
+        log.error("Failed to save latest timestamp. Aborting.")
+        return None
+
+    return [json.loads(line) for line in response.text.splitlines()]
+
+
+def filter_false_positives(events):
+    """Returns a list of the corresponding refs of 'comment-added' events where
+    the comment includes 'false positive'"""
+
+    log.info(f"Got {len(events)} events.")
+
+    comments = (event for event in events if event.get("comment", None))
+
+    false_positives = [
+        event.get("patchSet").get("ref")
+        for event in comments
+        if "false positive" in event.get("comment")
+    ]
+
+    if false_positives:
+        log.info(f"{len(false_positives)} 'false positives' found.")
+
+    return false_positives
+
+
 def main(args):
     """Entry-point for the script; see parse_args() for the arguments"""
 
@@ -313,6 +418,18 @@ def main(args):
         log.error("Failed filtering changes")
         return 1
 
+    if (gerrit_password := os.getenv("GERRIT_PASSWORD", None)) is None:
+        log.error("GERRIT_PASSWORD is not set")
+
+    if (events := get_events_from_gerrit(args, gerrit_password, ghpa_token)) is None:
+        log.error("Failed retrieving events")
+        return 1
+
+    if (false_positives := filter_false_positives(events)) is None:
+        log.error("Failed retrieving intermittent failures")
+        return 1
+
+    changes_to_push += false_positives
     for count, ref in enumerate(changes_to_push, 1):
         if count > args.limit:
             log.info(f"Pushed count({count}), stopping due to limit({args.limit})")
