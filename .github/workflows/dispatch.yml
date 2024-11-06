@@ -52,9 +52,14 @@ jobs:
       env:
         CHANGES_LIMIT: ${{ github.event.inputs.limit || 5 }}
         GHPA_TOKEN: ${{ secrets.GHPA_TOKEN }}
+        GERRIT_PASSWORD: ${{ secrets.GERRIT_PASSWORD}}
+        LAST_TIMESTAMP: ${{ vars.LAST_TIMESTAMP}}
       run: |
         ./ci/gerrit_changes_to_github.py \
+          --gerrit-username "spdk-community-ci-samsung" \
           --gerrit-api-url "https://review.spdk.io/gerrit/changes/?q=status:open+-age:6mon+repo:spdk/spdk+-label:Community-CI=ANY,user=spdk-community-ci-samsung+-%22%5BRFC%5D%22&o=CURRENT_REVISION" \
+          --gerrit-events-log-url "https://review.spdk.io/a/plugins/events-log/events/" \
+          --gh-variables-url "https://api.github.com/repos/spdk-community-ci/dispatcher/actions/variables/" \
           --git-repository-path spdk \
           --git-remote-target-name origin \
           --git-remote-gerrit-name gerrit \
