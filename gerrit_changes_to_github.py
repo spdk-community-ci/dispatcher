@@ -231,9 +231,12 @@ def changes_apply_branch_filter(args, changes, branches) -> List[str]:
 
     filtered = []
     for change in changes:
-        if [branch for branch, _ in branches if branch in change]:
+        branch_exists = [bname for bname, _ in branches if change.endswith(bname)]
+        if branch_exists:
+            log.info(f"For change({change}); branch_exists({branch_exists})")
             continue
 
+        log.info(f"change({change}) not in existing branches.")
         filtered.append(change)
 
     log.info(f"{len(changes) - len(filtered)} changes already have branches")
