@@ -29,19 +29,11 @@ workflows. How it works is briefly illustrated and described below.
 Illustrated
 -----------
 
-Here is an attempt at visualizing how this is functioning::
+Here is an attempt at visualizing how this is functioning:
 
-  Script --> Gerrit Rest API -- ChangeInfo() --> Script.var.changes
-    |  |
-    |  +------- git ls-remote <target> --------> Script.var.existing
-    |
-    +-------> var.changes - var.existig -------> Script.var.changes_to_push
-    |
-    +---> for change in Script.var.changes_to_push
-          |
-          +--> git fetch <gerrit> --> pit push <target>
-          |
-          +--> GitHub Rest API ---> Trigger Workflow Dispatch
+.. figure:: docs/diagram.png
+   :alt: Workflow diagram
+   :width: 500px
 
 In a couple of words
 --------------------
