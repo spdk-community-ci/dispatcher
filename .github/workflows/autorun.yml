@@ -73,7 +73,7 @@ jobs:
 
     - name: Setup CIJOE and pipx
       run: |
-        pipx install cijoe -f
+        pipx install cijoe==0.9.45 -f
         pipx ensurepath
         echo "$HOME/.local/bin" >> $GITHUB_PATH
       
